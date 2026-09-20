@@ -5,12 +5,16 @@ DEFAULT = {
     'url': 'https://example.com',
     'selector_type': 'css',
     'selector': '#submit-button',
-    'mode': 'scheduled',
+    'mode': 'manual',
     'schedule': {
-        'start_time': '08:30:00',
+        'start_time': 'now',
         'interval_seconds': 30,
-        'click_count': 10,
+        'click_count': 1,
         'repeat_until_stopped': False,
+    },
+    'refresh': {
+        'interval_seconds': 10,
+        'notify_only': True,
     },
     'detection': {
         'type': 'element_appears',

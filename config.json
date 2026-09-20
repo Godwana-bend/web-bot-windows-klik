@@ -1,26 +1,30 @@
 {
   "url": "https://example.com",
-  "selector_type": "css",
-  "selector": "#submit-button",
-  "mode": "scheduled",
+  "selector_type": "text",
+  "selector": "Buy Ticket",
+  "mode": "manual",
   "schedule": {
-    "start_time": "08:30:00",
+    "start_time": "10:00:00",
     "interval_seconds": 30,
-    "click_count": 10,
+    "click_count": 1,
     "repeat_until_stopped": false
   },
+  "refresh": {
+    "interval_seconds": 10,
+    "notify_only": true
+  },
   "detection": {
-    "type": "element_appears",
-    "selector": "#available-button",
-    "expected_text": "Available",
-    "cooldown_seconds": 5
+    "type": "element_becomes_enabled",
+    "selector": "button",
+    "expected_text": "Buy Ticket",
+    "cooldown_seconds": 10
   },
   "browser": {
     "headless": false,
-    "timeout_ms": 10000
+    "timeout_ms": 15000
   },
   "click": {
     "delay_ms": 100,
-    "max_clicks_per_minute": 20
+    "max_clicks_per_minute": 1
   }
 }

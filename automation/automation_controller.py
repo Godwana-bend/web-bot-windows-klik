@@ -3,6 +3,7 @@ import threading
 
 from app.state import AutomationState
 from automation.click_engine import ClickEngine
+from automation.manual_monitor import ManualRefreshMonitor
 from automation.page_detector import PageDetector
 from automation.scheduler import Scheduler
 from browser.browser_manager import BrowserManager
@@ -47,15 +48,26 @@ class AutomationController:
     async def _worker(self):
         self.browser = BrowserManager(self.config, self.logger, self.app_state)
         await self.browser.start()
-        url = self.config.get('url', 'https://example.com')
-        page = await self.browser.open(url)
+        page = await self.browser.open(self.config.get('url', 'https://example.com'))
         click_engine = ClickEngine(page, self.config, self.logger)
-
         mode = self.config.get('mode', 'scheduled')
-        if mode in ('scheduled', 'hybrid'):
-            await Scheduler(click_engine, self.config, self.logger, self.stop_event, self.pause_event).run()
-        if mode in ('detection', 'hybrid') and not self.stop_event.is_set():
-            await PageDetector(page, click_engine, self.config, self.logger, self.stop_event, self.pause_event).run()
+
+        if mode == 'manual':
+            await ManualRefreshMonitor(
+                page, click_engine, self.config, self.logger,
+                self.stop_event, self.pause_event,
+            ).run()
+        else:
+            if mode in ('scheduled', 'hybrid'):
+                await Scheduler(
+                    click_engine, self.config, self.logger,
+                    self.stop_event, self.pause_event,
+                ).run()
+            if mode == 'detection' and not self.stop_event.is_set():
+                await PageDetector(
+                    page, click_engine, self.config, self.logger,
+                    self.stop_event, self.pause_event,
+                ).run()
 
     def pause(self):
         self.pause_event.clear()
