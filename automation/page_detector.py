@@ -1,16 +1,109 @@
 import asyncio
-OBSERVER="""(selector,type,expected,notify)=>{if(window.__wab_observer)window.__wab_observer.disconnect();let last='';const check=()=>{let value=type==='url'?location.href:Array.from(selector?document.querySelectorAll(selector):[document.body]).map(n=>JSON.stringify({text:n.innerText||'',visible:!!(n.offsetWidth||n.offsetHeight||n.getClientRects().length),enabled:!n.disabled,attrs:[n.className,n.getAttribute('aria-disabled'),n.getAttribute('data-status')]})).join('|');if(value!==last){last=value;notify({value,url:location.href})}};window.__wab_observer=new MutationObserver(check);window.__wab_observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,characterData:true});check()}"""
+import time
+
+
 class PageDetector:
-    def __init__(self,page,clicker,cfg,emit,stop,pause): self.page=page; self.c=clicker; self.cfg=cfg; self.emit=emit; self.stop=stop; self.pause=pause; self.last=0
+    def __init__(self, page, clicker, config, emit, stop_event, pause_event):
+        self.page = page
+        self.clicker = clicker
+        self.config = config
+        self.emit = emit
+        self.stop_event = stop_event
+        self.pause_event = pause_event
+        self.last_trigger = 0.0
+
     async def run(self):
-        d=self.cfg.get('detection',{}); typ=d.get('type','element_appears'); expected=d.get('expected_text',''); cooldown=float(d.get('cooldown_seconds',5)); q=asyncio.Queue()
-        await self.page.expose_function('__wab_notify',lambda data:q.put_nowait(data)); await self.page.evaluate(OBSERVER,d.get('selector',''),typ,expected,'__wab_notify')
-        while not self.stop.is_set():
-            try: data=await asyncio.wait_for(q.get(),.5)
-            except asyncio.TimeoutError: continue
-            if not self.pause.is_set(): continue
-            if typ in ('text_appears','text_changes') and expected.lower() not in data.get('value','').lower(): continue
-            now=__import__('time').monotonic()
-            if now-self.last<cooldown: continue
-            try: await self.c.click(); self.last=now
-            except Exception as exc: self.emit.error('Detection click failed: '+str(exc))
+        detection_cfg = self.config.get('detection', {})
+        cooldown_seconds = float(detection_cfg.get('cooldown_seconds', 5))
+        selector = detection_cfg.get('selector', '')
+        expected = detection_cfg.get('expected_text', '')
+        detection_type = detection_cfg.get('type', 'element_appears')
+
+        queue = asyncio.Queue()
+
+        async def notify(payload):
+            await queue.put(payload)
+
+        await self.page.expose_function('__wab_notify', notify)
+        await self.page.evaluate(
+            """
+            ({ selector, detection_type, expected }) => {
+                const root = document.body || document.documentElement;
+                if (window.__wab_observer) {
+                    window.__wab_observer.disconnect();
+                }
+
+                const getText = () => {
+                    const node = selector ? document.querySelector(selector) : document.body;
+                    if (!node) {
+                        return '';
+                    }
+                    const text = node.innerText || node.textContent || '';
+                    return String(text).trim();
+                };
+
+                const report = () => {
+                    const el = selector ? document.querySelector(selector) : null;
+                    const payload = {
+                        hasElement: !!el,
+                        visible: !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length)),
+                        enabled: !!(el && !el.disabled),
+                        text: getText(),
+                        url: location.href,
+                        detectionType: detection_type,
+                    };
+                    window.__wab_notify(payload);
+                };
+
+                window.__wab_observer = new MutationObserver(() => report());
+                window.__wab_observer.observe(root, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    characterData: true,
+                    attributeFilter: ['disabled', 'class', 'style', 'aria-disabled', 'data-status'],
+                });
+                report();
+            }
+            """,
+            {'selector': selector, 'detection_type': detection_type, 'expected': expected},
+        )
+
+        while not self.stop_event.is_set():
+            try:
+                payload = await asyncio.wait_for(queue.get(), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
+
+            if self.pause_event.is_set() is False:
+                continue
+
+            if detection_type == 'element_appears':
+                if not payload.get('hasElement'):
+                    continue
+            elif detection_type == 'element_becomes_visible':
+                if not payload.get('visible'):
+                    continue
+            elif detection_type == 'element_becomes_enabled':
+                if not payload.get('enabled'):
+                    continue
+            elif detection_type == 'text_appears':
+                if expected.lower() not in str(payload.get('text', '')).lower():
+                    continue
+            elif detection_type == 'text_changes':
+                if payload.get('text', '') == '':
+                    continue
+            elif detection_type == 'url_changes':
+                if not payload.get('url'):
+                    continue
+
+            now = time.monotonic()
+            if now - self.last_trigger < cooldown_seconds:
+                continue
+
+            try:
+                await self.clicker.click_selector()
+                self.last_trigger = now
+                self.emit.info('Detection trigger fired')
+            except Exception as exc:  # pragma: no cover - runtime branch
+                self.emit.error(f'Detection click failed: {exc}')

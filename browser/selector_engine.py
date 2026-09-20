@@ -1,6 +1,16 @@
-def best_selector(data):
-    if data.get('id'): return '#'+data['id']
-    if data.get('data-testid'): return '[data-testid="'+data['data-testid']+'"]'
-    if data.get('name'): return '[name="'+data['name']+'"]'
-    if data.get('aria-label'): return '[aria-label="'+data['aria-label']+'"]'
-    tag=data.get('tag','div').lower(); return tag
+def best_selector(element):
+    if not isinstance(element, dict):
+        return 'body'
+
+    if element.get('id'):
+        return f"#{element['id']}"
+    if element.get('data-testid'):
+        return f"[data-testid=\"{element['data-testid']}\"]"
+    if element.get('name'):
+        return f"[name=\"{element['name']}\"]"
+    if element.get('aria-label'):
+        return f"[aria-label=\"{element['aria-label']}\"]"
+    if element.get('role'):
+        return f"[role=\"{element['role']}\"]"
+    tag = (element.get('tag') or 'div').lower()
+    return tag

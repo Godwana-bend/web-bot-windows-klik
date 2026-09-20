@@ -1,0 +1,26 @@
+{
+  "url": "https://example.com",
+  "selector_type": "css",
+  "selector": "#submit-button",
+  "mode": "scheduled",
+  "schedule": {
+    "start_time": "08:30:00",
+    "interval_seconds": 30,
+    "click_count": 10,
+    "repeat_until_stopped": false
+  },
+  "detection": {
+    "type": "element_appears",
+    "selector": "#available-button",
+    "expected_text": "Available",
+    "cooldown_seconds": 5
+  },
+  "browser": {
+    "headless": false,
+    "timeout_ms": 10000
+  },
+  "click": {
+    "delay_ms": 100,
+    "max_clicks_per_minute": 20
+  }
+}

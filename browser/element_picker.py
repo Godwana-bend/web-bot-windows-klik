@@ -1,5 +1,56 @@
-from .selector_engine import best_selector
+from browser.selector_engine import best_selector
+
+
 class ElementPicker:
-    async def install(self,page,callback):
-        await page.expose_function('__wab_pick',callback)
-        await page.evaluate("""() => { document.addEventListener('click',e=>{const n=e.target;e.preventDefault();e.stopPropagation();window.__wab_pick({tag:n.tagName,id:n.id,name:n.getAttribute('name'),'aria-label':n.getAttribute('aria-label'),role:n.getAttribute('role'),text:(n.innerText||'').trim(),data-testid:n.getAttribute('data-testid')})},true) }""")
+    def __init__(self):
+        self._active = False
+
+    async def install(self, page, callback):
+        self._active = True
+        await page.expose_function('__wab_pick', callback)
+        await page.evaluate(
+            """
+            () => {
+                const overlay = document.createElement('div');
+                overlay.style.position = 'fixed';
+                overlay.style.pointerEvents = 'none';
+                overlay.style.border = '2px solid #3b82f6';
+                overlay.style.background = 'rgba(59,130,246,0.14)';
+                overlay.style.zIndex = '2147483646';
+                overlay.style.display = 'none';
+                document.body.appendChild(overlay);
+
+                const onMove = (event) => {
+                    const el = event.target;
+                    const rect = el.getBoundingClientRect();
+                    overlay.style.display = 'block';
+                    overlay.style.left = `${Math.round(rect.left)}px`;
+                    overlay.style.top = `${Math.round(rect.top)}px`;
+                    overlay.style.width = `${Math.max(Math.round(rect.width), 8)}px`;
+                    overlay.style.height = `${Math.max(Math.round(rect.height), 8)}px`;
+                };
+
+                document.addEventListener('mousemove', onMove, true);
+                document.addEventListener('click', (event) => {
+                    const el = event.target;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const data = {
+                        tag: el.tagName,
+                        id: el.id,
+                        class: el.className,
+                        name: el.getAttribute('name'),
+                        'aria-label': el.getAttribute('aria-label'),
+                        role: el.getAttribute('role'),
+                        text: (el.innerText || '').trim(),
+                        'data-testid': el.getAttribute('data-testid'),
+                    };
+                    overlay.style.display = 'none';
+                    window.__wab_pick(data);
+                }, true);
+            }
+            """
+        )
+
+    def active(self):
+        return self._active
